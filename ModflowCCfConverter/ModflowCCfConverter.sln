@@ -3,7 +3,12 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 14
 VisualStudioVersion = 14.0.24720.0
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ModflowCCfConverter", "ModflowCCfConverter.csproj", "{ABB19833-A0C1-4C78-9711-90DC009D07FB}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ModflowCcfConverter", "ModflowCcfConverter.csproj", "{ABB19833-A0C1-4C78-9711-90DC009D07FB}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{2D978972-D89F-4D69-9AA7-581B3E1D5F62}"
+	ProjectSection(SolutionItems) = preProject
+		Class1.vb = Class1.vb
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
