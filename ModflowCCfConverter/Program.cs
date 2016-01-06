@@ -11,111 +11,74 @@ namespace ModflowCCfConverter
     {
         static void Main(string[] args)
         {
-            DoProgram();
-
-            //using (FileStream fs = new FileStream(binaryInputPath, FileMode.Open))
-            //{
-            //    Console.WriteLine(fs.Name);
-            //    using (BinaryReader br = new BinaryReader(fs))
-            //    {
-            //        for (int i = 0; i < 10; i++)
-            //        {
-            //            Console.Write(br.ReadString());
-            //        }
-            //    }
-            //}
-
-            //
-
+            Tester tester = new Tester();
+            tester.DoProgram();
         }
+    }
+    public class Tester
+    {
+        public Tester() { }
 
-        public static void DoProgram()
+        public void DoProgram()
         {
-            #region variables
-            string address;
-            long startingPoint;
-            int charAmount;
-            #endregion
+            string inputAddress = @"D:\DSModel_09.ccf";
+            string targetAddress = @"D:\DSModel_09.txt";
 
-            address = /*GetAddress();*/ @"D:\DSModel_09.ccf";
-            startingPoint = /*GetStartingPoint();*/ 0;
-            charAmount = /*GetCharAmount();*/ 8;
+            int lengthOfSubArray;
 
-            if (string.IsNullOrEmpty(address))
+            Console.Write("Please input length of sub array: ");
+            try
+            {
+                lengthOfSubArray = int.Parse(Console.ReadLine());
+            }
+            catch (Exception)
             {
                 return;
             }
-            for (int i = 0; i < 4; i++)
+
+            using (FileStream fs = new FileStream(inputAddress, FileMode.Open))
             {
-                BeginRead(address, startingPoint, charAmount);
-                startingPoint += 50;
+                using (BinaryReader br = new BinaryReader(fs))
+                {
+                    int length = Convert.ToInt32(fs.Length);
+                    Console.WriteLine(length.ToString());
+
+                    lengthOfSubArray = Math.Min(lengthOfSubArray, length);
+
+                    byte[] bin = br.ReadBytes(length).SubArray(0, lengthOfSubArray);
+                    Console.WriteLine("Length: " + bin.Length.ToString());
+
+
+
+                    string a = Convert.ToBase64String(bin);
+
+
+                    using (FileStream fs2 = new FileStream(targetAddress, FileMode.Create))
+                    {
+                        using (StreamWriter sw = new StreamWriter(fs2))
+                        {
+                            sw.Write(a);
+                        }
+                    }
+                }
             }
-            
 
             Console.ReadLine();
         }
 
-        public static string GetAddress()
-        {
-            string address = string.Empty;
-            Console.WriteLine("Enter file addess: ");
-            try
-            {
-                address = Console.ReadLine();
-                Console.WriteLine("Reading address succeeded, address set to:\n " + address);
-            }
-            catch (Exception)
-            {
-                Console.WriteLine("Reading address failed.");
-            }
-            return address;
-        }
-
-        public static long GetStartingPoint()
-        {
-            long startingPoint;
-            Console.Write("Enter starting point: ");
-            try
-            {
-                startingPoint = long.Parse(Console.ReadLine());
-                Console.WriteLine("Reading value succeeded, starting point set to " + startingPoint.ToString() + ".");
-            }
-            catch (Exception)
-            {
-                startingPoint = 0;
-                Console.WriteLine("Reading value failed, starting point set to 0.");
-            }
-            return startingPoint;
-        }
-
-        public static int GetCharAmount()
-        {
-            int charAmount;
-            Console.Write("Enter char amount: ");
-            try
-            {
-                charAmount = int.Parse(Console.ReadLine());
-                Console.WriteLine("Reading value succeeded, char amount set to " + charAmount.ToString() + ".");
-            }
-            catch (Exception)
-            {
-                charAmount = 1;
-                Console.WriteLine("Reading value failed, char amount set to 1.");
-            }
-            return charAmount;
-        }
-
-        public static void BeginRead(string address, long startingPoint, int charAmount)
-        {
-            BinaryReader br = new BinaryReader(File.OpenRead(address));
-            string text = "";
-            br.BaseStream.Position = startingPoint;
-            foreach (var i in br.ReadChars(charAmount))
-            {
-                text += i;
-            }
-            //Console.WriteLine("Contents of the file are:\n" + text);
-        }
+        
 
     }
+
+    public static class Ext
+    {
+        public static T[] SubArray<T>(this T[] data, int index, int length)
+        {
+            T[] result = new T[length];
+            Array.Copy(data, index, result, 0, length);
+            return result;
+        }
+    }
+
+    
 }
