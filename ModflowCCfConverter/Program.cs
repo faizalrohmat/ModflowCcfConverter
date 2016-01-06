@@ -21,64 +21,32 @@ namespace ModflowCCfConverter
 
         public void DoProgram()
         {
-            string inputAddress = @"D:\DSModel_09.ccf";
-            string targetAddress = @"D:\DSModel_09.txt";
+            //string inputAddress = @"D:\DSModel_09.ccf";
+            //string targetAddress = @"D:\DSModel_09.txt";
 
-            int lengthOfSubArray;
+            char[] invalidPathChars = Path.GetInvalidPathChars();
+            MemoryStream memStream = new MemoryStream();
+            BinaryWriter binWriter = new BinaryWriter(memStream);
 
-            Console.Write("Please input length of sub array: ");
-            try
-            {
-                lengthOfSubArray = int.Parse(Console.ReadLine());
-            }
-            catch (Exception)
-            {
-                return;
-            }
+            // Write to memory.
+            binWriter.Write("Invalid file path characters are: ");
+            binWriter.Write(Path.GetInvalidPathChars(), 0, Path.GetInvalidPathChars().Length);
 
-            using (FileStream fs = new FileStream(inputAddress, FileMode.Open))
-            {
-                using (BinaryReader br = new BinaryReader(fs))
-                {
-                    int length = Convert.ToInt32(fs.Length);
-                    Console.WriteLine(length.ToString());
+            // Create the reader using the same MemoryStream 
+            // as used with the writer.
+            BinaryReader binReader = new BinaryReader(memStream);
 
-                    lengthOfSubArray = Math.Min(lengthOfSubArray, length);
+            // Set Position to the beginning of the stream.
+            memStream.Position = 0;
 
-                    byte[] bin = br.ReadBytes(length).SubArray(0, lengthOfSubArray);
-                    Console.WriteLine("Length: " + bin.Length.ToString());
-
-
-
-                    string a = Convert.ToBase64String(bin);
-
-
-                    using (FileStream fs2 = new FileStream(targetAddress, FileMode.Create))
-                    {
-                        using (StreamWriter sw = new StreamWriter(fs2))
-                        {
-                            sw.Write(a);
-                        }
-                    }
-                }
-            }
+            // Read the data from memory and write it to the console.
+            Console.Write(binReader.ReadString());
+            int arraySize = (int)(memStream.Length - memStream.Position);
+            char[] memoryData = new char[arraySize];
+            binReader.Read(memoryData, 0, arraySize);
+            Console.WriteLine(memoryData);
 
             Console.ReadLine();
         }
-
-        
-
-    }
-
-    public static class Ext
-    {
-        public static T[] SubArray<T>(this T[] data, int index, int length)
-        {
-            T[] result = new T[length];
-            Array.Copy(data, index, result, 0, length);
-            return result;
-        }
-    }
-
-    
+    }    
 }
