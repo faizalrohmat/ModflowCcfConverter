@@ -4,6 +4,8 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Reflection;
+using System.Linq.Expressions;
 
 namespace ModflowCcfConverter
 {
@@ -25,112 +27,142 @@ namespace ModflowCcfConverter
             string inputAddress2 = @"D:\ReModel3.ccf";
             string targetAddress = @"D:\DSModel_09.txt";
 
-            EricMethod(inputAddress2);
 
-            // MyMethod(inputAddress);
-            // FailedMethod(inputAddress);
+            MyMethod(inputAddress);
+
+            //EricMethod(inputAddress);
 
             Console.ReadLine();
 
         }
 
-        private static void FailedMethod(string inputAddress)
-        {
-            string r = "r";
-            string c;
-
-            using (FileStream fs = new FileStream(inputAddress, FileMode.Open, FileAccess.Read))
-            {
-                using (BinaryReader br = new BinaryReader(fs))
-                {
-                    for (int pos = 0; pos < fs.Length; pos++)
-                    {
-                        c = new string(br.ReadChars(1));
-                        if (r.CompareTo(c) == 0)
-                        {
-                            Console.WriteLine((fs.Position - (long)1).ToString() + "\t" + c.ToString());
-                        }
-                    }
-                }
-            }
-        }
-
         private static void MyMethod(string inputAddress)
         {
+            Action<string, object> writeLine = (_name, _content) => Console.WriteLine(_name + " = {0}", _content.ToString());
+            Action<string, object> write = (_name, _content) => Console.Write(_name + " = {0}\t", _content.ToString());
+
             using (FileStream fs = new FileStream(inputAddress, FileMode.Open, FileAccess.Read))
             {
                 using (BinaryReader br = new BinaryReader(fs))
                 {
-                    // File lengths
-                    Console.WriteLine("File stream length: " + fs.Length);
-                    Console.WriteLine();
+                    int timeStepCount = 0;
 
-                    // timestep, and description
-                    Console.Write(fs.Position.ToString() + "\t");
-                    int timeStep = br.ReadInt32();
-                    Console.WriteLine("timeStep\t\t: " + timeStep.ToString());
-
-                    // stress period
-                    Console.Write(fs.Position.ToString() + "\t");
-                    int stressPeriod = br.ReadInt32();
-                    Console.WriteLine("stressPeriod\t\t: " + stressPeriod.ToString());
-
-                    Console.Write(fs.Position.ToString() + "\t");
-                    char[] fText = br.ReadChars(16);
-                    Console.WriteLine("description\t\t: " + new string(fText));
-
-
-
-                    // Number of columns
-                    Console.Write(fs.Position.ToString() + "\t");
-                    int nCol = br.ReadInt32();
-                    Console.WriteLine("nCol\t\t\t: " + nCol.ToString());
-
-                    // Number of rows
-                    Console.Write(fs.Position.ToString() + "\t");
-                    int nRow = br.ReadInt32();
-                    Console.WriteLine("nRow\t\t\t: " + nRow.ToString());
-
-                    // Number of layers
-                    Console.Write(fs.Position.ToString() + "\t");
-                    int nLay = Math.Abs(br.ReadInt32());
-                    Console.WriteLine("nLays\t\t\t: " + nLay.ToString());
-
-
-                    // type of data
-                    Console.Write(fs.Position.ToString() + "\t");
-                    int iType = br.ReadInt32();
-                    Console.WriteLine("iType\t\t\t: " + iType.ToString());
-
-                    // number of values per cell
-                    int nvalsPerCell = 1;
-                    Console.Write(fs.Position.ToString() + "\t");
-                    if (iType == 5)
+                    while (fs.Position < fs.Length)
                     {
-                        nvalsPerCell = br.ReadInt32();
+                        int timeStep = br.ReadInt32(); writeLine(nameof(timeStep), timeStep);
+                        int stressPeriod = br.ReadInt32(); writeLine(nameof(stressPeriod), stressPeriod);
+                        string fText = (new string(br.ReadChars(16))).Replace(" ", string.Empty); writeLine(nameof(fText), fText);
+
+                        int nCol = br.ReadInt32(); writeLine(nameof(nCol), nCol);
+                        int nRow = br.ReadInt32(); writeLine(nameof(nRow), nRow);
+                        int nLay = Math.Abs(br.ReadInt32()); writeLine(nameof(nLay), nLay);
+                        int iType = br.ReadInt32(); writeLine(nameof(iType), iType);
+
+                        for (int i = 0; i < 3; i++) br.ReadSingle();
+
+                        int nValsPerCell;
+                        if (iType == 5) nValsPerCell = br.ReadInt32();
+                        else nValsPerCell = 1;
+                        writeLine(nameof(nValsPerCell), nValsPerCell);
+
+                        List<string> tempText = new List<string>();
+                        for (int i = 0; i < nValsPerCell - 1; i++)
+                        {
+                            tempText.Add(new string(br.ReadChars(16)));
+                            writeLine(nameof(iType), iType);
+                        }
+
+                        int nList;
+                        if (iType == 2 || iType == 5)
+                        {
+                            nList = br.ReadInt32();
+                            writeLine(nameof(nList), nList);
+                        }
+                        else nList = 0;
+
+                        string caseType = string.Empty;
+
+                        switch (iType)
+                        {
+                            case 0:
+                            case 1:
+                                caseType = "3D array of values";
+                                for (int lay = 0; lay < nLay; lay++)
+                                {
+                                    writeLine(nameof(lay), lay);
+
+                                    Console.WriteLine();
+                                    for (int row = 0; row < nRow; row++)
+                                    {
+                                        writeLine(nameof(row), row);
+                                        for (int col = 0; col < nCol; col++)
+                                        {
+                                            Console.Write(br.ReadSingle() + "\t");
+                                        }
+                                        Console.WriteLine();
+                                    }
+                                }
+                                break;
+                            case 2:
+                            case 5:
+                                caseType = "list of cells and associated values";
+                                for (int i = 0; i < nList; i++)
+                                {
+                                    int cellID = br.ReadInt32();
+                                    write(nameof(cellID), cellID);
+                                    for (int j = 0; j < nValsPerCell; j++)
+                                    {
+                                        Console.Write("\t" + br.ReadSingle().ToString());
+                                    }
+                                    Console.WriteLine();
+                                }
+                                break;
+                            case 3:
+                                caseType = "2D layer indicator array followed by a 2D array of values";
+                                int[] layerIDs = new int[nCol * nRow];
+                                for (int row = 1; row <= nRow; row++)
+                                {
+                                    for (int col = 1; col <= nCol; col++)
+                                    {
+                                        layerIDs[(row - 1) * nCol + col] = br.ReadInt32();
+                                        Console.WriteLine("layerIDs: " + layerIDs.ToString());
+                                    }
+                                }
+                                for (int row = 1; row <= nRow; row++)
+                                {
+                                    for (int col = 1; col <= nCol; col++)
+                                    {
+                                        int cellID = (row - 1) * nCol + col;
+                                        Console.WriteLine(layerIDs[cellID].ToString() + br.ReadSingle().ToString());
+                                    }
+                                }
+                                break;
+                            case 4:
+                            default:
+                                caseType = "2D array of values associated with layer 1";
+                                for (int row = 1; row <= nRow; row++)
+                                {
+                                    for (int col = 1; col <= nCol; col++)
+                                    {
+                                        int cellID = (row - 1) * nCol + col;
+                                        Console.WriteLine("cellID: " + cellID + "\t" + br.ReadSingle());
+                                    }
+                                }
+                                break;
+                        }
+
+                        for (int i = 0; i < 20; i++)
+                        {
+                            Console.Write("-");
+                        }
+                        Console.WriteLine();
+                        Console.WriteLine("Done writing " + fText + " as \"" + caseType + "\" at " + nameof(stressPeriod) + " " + stressPeriod);
+                        Console.WriteLine();
+
+                        //Console.ReadLine();
+                        //return;
+
                     }
-                    Console.WriteLine("nvalsPerCell\t\t: " + nvalsPerCell.ToString());
-
-                    // conditional, depending on the nvalsPerCell
-                    for (int y = 1; y <= nvalsPerCell - 1; y++)
-                    {
-                        Console.Write(fs.Position.ToString() + "\t");
-                        char[] tmpText = br.ReadChars(16);
-                        Console.WriteLine("tmpText\t\t: " + new string(tmpText));
-                    }
-
-                    // conditional, depending on nlist
-                    int nList = 0;
-                    if (iType == 2 || iType == 5)
-                    {
-                        Console.Write(fs.Position.ToString() + "\t");
-                        nList = br.ReadInt32();
-                        Console.WriteLine("nList\t\t\t: " + nList.ToString());
-                    }
-
-                    // skip if true
-                    bool SkipValues = false;
-
 
                 }
             }
@@ -337,7 +369,7 @@ namespace ModflowCcfConverter
                                 break;
                             case 4:
                             default:
-                                Console.WriteLine("'2D array of values associated with layer 1");
+                                Console.WriteLine("2D array of values associated with layer 1");
                                 if (skipValues)
                                 {
                                     fs.Position += nRow * nCol * 4;
