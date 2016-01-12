@@ -6,6 +6,8 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Reflection;
 using System.Linq.Expressions;
+using System.Xml.Linq;
+using System.Xml.XPath;
 
 namespace ModflowCcfConverter
 {
@@ -24,11 +26,11 @@ namespace ModflowCcfConverter
         public void DoProgram()
         {
             string inputAddress = @"D:\DSModel_09.ccf";
-            string inputAddress2 = @"D:\ReModel3.ccf";
-            string targetAddress = @"D:\DSModel_09.txt";
+            //string inputAddress2 = @"D:\ReModel3.ccf";
+            string targetAddress = @"D:\resultDS.xml";
+            //string targetAddress2 = @"D:\resultUS.xml";
 
-
-            MyMethod(inputAddress);
+            MyMethod(inputAddress, targetAddress);
 
             //EricMethod(inputAddress);
 
@@ -36,10 +38,17 @@ namespace ModflowCcfConverter
 
         }
 
-        private static void MyMethod(string inputAddress)
+        private static void MyMethod(string inputAddress, string targetAddress)
         {
             Action<string, object> writeLine = (_name, _content) => Console.WriteLine(_name + " = {0}", _content.ToString());
             Action<string, object> write = (_name, _content) => Console.Write(_name + " = {0}\t", _content.ToString());
+
+            XDocument xd = new XDocument(
+                new XDeclaration("1.0", "utf-8", "yes"),
+                new XComment("MODFLOW Result, parsed from " + inputAddress),
+                new XElement("Results"));
+
+            XElement root = xd.XPathSelectElement("//Results");
 
             using (FileStream fs = new FileStream(inputAddress, FileMode.Open, FileAccess.Read))
             {
@@ -49,14 +58,15 @@ namespace ModflowCcfConverter
 
                     while (fs.Position < fs.Length)
                     {
-                        int timeStep = br.ReadInt32(); writeLine(nameof(timeStep), timeStep);
-                        int stressPeriod = br.ReadInt32(); writeLine(nameof(stressPeriod), stressPeriod);
-                        string fText = (new string(br.ReadChars(16))).Replace(" ", string.Empty); writeLine(nameof(fText), fText);
+                        // read result header first
+                        int timeStep = br.ReadInt32();
+                        int stressPeriod = br.ReadInt32();
+                        string fText = (new string(br.ReadChars(16))).Replace(" ", string.Empty);
 
-                        int nCol = br.ReadInt32(); writeLine(nameof(nCol), nCol);
-                        int nRow = br.ReadInt32(); writeLine(nameof(nRow), nRow);
-                        int nLay = Math.Abs(br.ReadInt32()); writeLine(nameof(nLay), nLay);
-                        int iType = br.ReadInt32(); writeLine(nameof(iType), iType);
+                        int nCol = br.ReadInt32();
+                        int nRow = br.ReadInt32();
+                        int nLay = Math.Abs(br.ReadInt32());
+                        int iType = br.ReadInt32();
 
                         for (int i = 0; i < 3; i++) br.ReadSingle();
 
@@ -65,12 +75,24 @@ namespace ModflowCcfConverter
                         else nValsPerCell = 1;
                         writeLine(nameof(nValsPerCell), nValsPerCell);
 
-                        List<string> tempText = new List<string>();
-                        for (int i = 0; i < nValsPerCell - 1; i++)
+                        // create header XElement of it with a lot of attributes, lol
+                        XElement header = new XElement(fText,
+                            new XAttribute(nameof(timeStep), timeStep),
+                            new XAttribute(nameof(stressPeriod), stressPeriod),
+                            new XAttribute(nameof(nCol), nCol),
+                            new XAttribute(nameof(nRow), nRow),
+                            new XAttribute(nameof(nLay), nLay),
+                            new XAttribute(nameof(iType), iType)
+                            );
+
+                        XElement tempText = new XElement(nameof(tempText));
+                        for (int i = 1; i <= nValsPerCell - 1; i++)
                         {
-                            tempText.Add(new string(br.ReadChars(16)));
-                            writeLine(nameof(iType), iType);
+                            string text = (new string(br.ReadChars(16))).Replace(" ", string.Empty);
+                            tempText.Add(new XElement(nameof(text), text, new XAttribute("id", i)));
                         }
+
+                        header.Add(tempText);
 
                         int nList;
                         if (iType == 2 || iType == 5)
@@ -79,28 +101,32 @@ namespace ModflowCcfConverter
                             writeLine(nameof(nList), nList);
                         }
                         else nList = 0;
+                        header.Add(new XAttribute(nameof(nList), nList));
 
                         string caseType = string.Empty;
-
+                        XElement data = new XElement(nameof(data));
                         switch (iType)
                         {
                             case 0:
                             case 1:
                                 caseType = "3D array of values";
-                                for (int lay = 0; lay < nLay; lay++)
-                                {
-                                    writeLine(nameof(lay), lay);
 
-                                    Console.WriteLine();
-                                    for (int row = 0; row < nRow; row++)
+                                for (int lay = 1; lay <= nLay; lay++)
+                                {
+                                    XElement xLay = new XElement(nameof(lay), new XAttribute("layid", lay));
+
+                                    for (int row = 1; row <= nRow; row++)
                                     {
-                                        writeLine(nameof(row), row);
-                                        for (int col = 0; col < nCol; col++)
+                                        XElement xRow = new XElement(nameof(row), new XAttribute("rowid", row));
+                                        for (int col = 1; col <= nCol; col++)
                                         {
-                                            Console.Write(br.ReadSingle() + "\t");
+                                            float val = br.ReadSingle();
+                                            XElement xCol = new XElement(nameof(col), new XAttribute("colid", col), val);
+                                            xRow.Add(xCol);
                                         }
-                                        Console.WriteLine();
+                                        xLay.Add(xRow);
                                     }
+                                    data.Add(xLay);
                                 }
                                 break;
                             case 2:
@@ -109,60 +135,93 @@ namespace ModflowCcfConverter
                                 for (int i = 0; i < nList; i++)
                                 {
                                     int cellID = br.ReadInt32();
-                                    write(nameof(cellID), cellID);
+                                    XElement xCel = new XElement("cell", new XAttribute(nameof(cellID), cellID));
                                     for (int j = 0; j < nValsPerCell; j++)
                                     {
-                                        Console.Write("\t" + br.ReadSingle().ToString());
+                                        float val = br.ReadSingle();
+                                        xCel.Add(new XElement(nameof(val), new XAttribute("id", j), val));
                                     }
-                                    Console.WriteLine();
+                                    data.Add(xCel);
                                 }
                                 break;
                             case 3:
                                 caseType = "2D layer indicator array followed by a 2D array of values";
-                                int[] layerIDs = new int[nCol * nRow];
+                                //int[] layerIDs = new int[nCol * nRow];
+                                // layer indicator
+                                XElement layerID = new XElement(nameof(layerID));
                                 for (int row = 1; row <= nRow; row++)
                                 {
+                                    XElement xRow = new XElement(nameof(row), new XAttribute("rowid", row));
                                     for (int col = 1; col <= nCol; col++)
                                     {
-                                        layerIDs[(row - 1) * nCol + col] = br.ReadInt32();
-                                        Console.WriteLine("layerIDs: " + layerIDs.ToString());
+                                        int val = br.ReadInt32();
+                                        XElement xCol = new XElement(nameof(col), new XAttribute("colid", col), val);
+                                        xRow.Add(xCol);
                                     }
+                                    layerID.Add(xRow);
                                 }
+                                XElement value = new XElement(nameof(value));
                                 for (int row = 1; row <= nRow; row++)
                                 {
+                                    XElement xRow = new XElement(nameof(row), new XAttribute("rowid", row));
                                     for (int col = 1; col <= nCol; col++)
                                     {
-                                        int cellID = (row - 1) * nCol + col;
-                                        Console.WriteLine(layerIDs[cellID].ToString() + br.ReadSingle().ToString());
+                                        float val = br.ReadSingle();
+                                        XElement xCol = new XElement(nameof(col), new XAttribute("colid", col), val);
+                                        xRow.Add(xCol);
                                     }
+                                    value.Add(xRow);
                                 }
+                                data.Add(layerID);
+                                data.Add(value);
                                 break;
                             case 4:
                             default:
+                                XElement firstLayerValue = new XElement(nameof(firstLayerValue));
                                 caseType = "2D array of values associated with layer 1";
                                 for (int row = 1; row <= nRow; row++)
                                 {
+                                    XElement xRow = new XElement(nameof(row), new XAttribute("rowid", row));
                                     for (int col = 1; col <= nCol; col++)
                                     {
-                                        int cellID = (row - 1) * nCol + col;
-                                        Console.WriteLine("cellID: " + cellID + "\t" + br.ReadSingle());
+                                        float val = br.ReadSingle();
+                                        XElement xCol = new XElement(nameof(col), new XAttribute("colid", col), val);
+                                        xRow.Add(xCol);
                                     }
+                                    firstLayerValue.Add(xRow);
                                 }
+                                data.Add(firstLayerValue);
                                 break;
                         }
+
+                        header.Add(new XAttribute(nameof(caseType), caseType));
+
+                        header.Add(data);
+                        root.Add(header);
 
                         for (int i = 0; i < 20; i++)
                         {
                             Console.Write("-");
                         }
+
+
                         Console.WriteLine();
                         Console.WriteLine("Done writing " + fText + " as \"" + caseType + "\" at " + nameof(stressPeriod) + " " + stressPeriod);
                         Console.WriteLine();
 
-                        //Console.ReadLine();
-                        //return;
+                        Console.Write("Continue? (y/n) ");
+                        object c = null;
+                        try { c = Console.ReadLine(); }
+                        catch { }
 
+                        if (!(c.ToString() == "y" || c.ToString() == "Y"))
+                        {
+                            break;
+                        }
+                        Console.WriteLine();
                     }
+
+                    xd.Save(targetAddress);
 
                 }
             }
