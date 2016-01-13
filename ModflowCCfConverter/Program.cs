@@ -30,7 +30,7 @@ namespace ModflowCcfConverter
             string targetAddress = @"D:\resultDS.xml";
             //string targetAddress2 = @"D:\resultUS.xml";
 
-            MyMethod(inputAddress, targetAddress);
+            WriteToXml(inputAddress, targetAddress);
 
             //EricMethod(inputAddress);
 
@@ -38,17 +38,17 @@ namespace ModflowCcfConverter
 
         }
 
-        private static void MyMethod(string inputAddress, string targetAddress)
+        private static void WriteToXml(string inputAddress, string targetAddress)
         {
             Action<string, object> writeLine = (_name, _content) => Console.WriteLine(_name + " = {0}", _content.ToString());
             Action<string, object> write = (_name, _content) => Console.Write(_name + " = {0}\t", _content.ToString());
 
-            XDocument xd = new XDocument(
+            XDocument doc = new XDocument(
                 new XDeclaration("1.0", "utf-8", "yes"),
                 new XComment("MODFLOW Result, parsed from " + inputAddress),
                 new XElement("Results"));
 
-            XElement root = xd.XPathSelectElement("//Results");
+            doc.Save(targetAddress);
 
             using (FileStream fs = new FileStream(inputAddress, FileMode.Open, FileAccess.Read))
             {
@@ -58,6 +58,10 @@ namespace ModflowCcfConverter
 
                     while (fs.Position < fs.Length)
                     {
+                        var xd = XDocument.Load(targetAddress);
+
+                        XElement root = xd.XPathSelectElement("//Results");
+
                         // read result header first
                         int timeStep = br.ReadInt32();
                         int stressPeriod = br.ReadInt32();
@@ -73,7 +77,7 @@ namespace ModflowCcfConverter
                         int nValsPerCell;
                         if (iType == 5) nValsPerCell = br.ReadInt32();
                         else nValsPerCell = 1;
-                        writeLine(nameof(nValsPerCell), nValsPerCell);
+                        //writeLine(nameof(nValsPerCell), nValsPerCell);
 
                         // create header XElement of it with a lot of attributes, lol
                         XElement header = new XElement(fText,
@@ -98,7 +102,7 @@ namespace ModflowCcfConverter
                         if (iType == 2 || iType == 5)
                         {
                             nList = br.ReadInt32();
-                            writeLine(nameof(nList), nList);
+                            //writeLine(nameof(nList), nList);
                         }
                         else nList = 0;
                         header.Add(new XAttribute(nameof(nList), nList));
@@ -208,7 +212,7 @@ namespace ModflowCcfConverter
                         Console.WriteLine();
                         Console.WriteLine("Done writing " + fText + " as \"" + caseType + "\" at " + nameof(stressPeriod) + " " + stressPeriod);
                         Console.WriteLine();
-
+                        /*
                         Console.Write("Continue? (y/n) ");
                         object c = null;
                         try { c = Console.ReadLine(); }
@@ -217,11 +221,15 @@ namespace ModflowCcfConverter
                         if (!(c.ToString() == "y" || c.ToString() == "Y"))
                         {
                             break;
-                        }
+                        }*/
                         Console.WriteLine();
+
+
+                        xd.Save(targetAddress);
+
                     }
 
-                    xd.Save(targetAddress);
+
 
                 }
             }
@@ -302,7 +310,6 @@ namespace ModflowCcfConverter
                         if (iType == 2 || iType == 5)
                         {
                             nList = br.ReadInt32();
-                            Console.WriteLine("nList\t\t\t: " + nList.ToString());
                         }
 
                         // Make sure just to skip the values that aren't of interest
