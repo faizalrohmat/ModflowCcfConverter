@@ -8,6 +8,8 @@ using System.Reflection;
 using System.Linq.Expressions;
 using System.Xml.Linq;
 using System.Xml.XPath;
+using ModflowCCfConverter;
+using System.Diagnostics;
 
 namespace ModflowCcfConverter
 {
@@ -26,11 +28,23 @@ namespace ModflowCcfConverter
         public void DoProgram()
         {
             string inputAddress = @"D:\DSModel_09.ccf";
-            //string inputAddress2 = @"D:\ReModel3.ccf";
+            //string inputAddress = @"D:\ReModel3.ccf";
             string targetAddress = @"D:\resultDS.xml";
-            //string targetAddress2 = @"D:\resultUS.xml";
+            //string targetAddress = @"D:\resultUS.xml";
 
-            WriteToXml(inputAddress, targetAddress);
+            string targetParentDir = @"D:\resultDS";
+
+            // WriteToXml writer = new WriteToXml();
+            // writer.Writer(inputAddress, targetAddress);
+
+            int ncolsDS = 217;
+            int nrowsDS = 102;
+            float xllcorner = 705984f;
+            float yllcorner = 4211006f;
+            float cellsize = 250f;
+            float nodatavalue = -999f;
+
+            WriteToAsciiDir(inputAddress, targetParentDir, ncolsDS, nrowsDS, xllcorner, yllcorner, cellsize, nodatavalue);
 
             //EricMethod(inputAddress);
 
@@ -38,30 +52,38 @@ namespace ModflowCcfConverter
 
         }
 
-        private static void WriteToXml(string inputAddress, string targetAddress)
+        private void WriteToAsciiDir(string inputAddress, string targetParentDir, int ncolsDS, int nrowsDS, float xllcorner, float yllcorner, float cellsize, float nodatalue)
         {
-            Action<string, object> writeLine = (_name, _content) => Console.WriteLine(_name + " = {0}", _content.ToString());
-            Action<string, object> write = (_name, _content) => Console.Write(_name + " = {0}\t", _content.ToString());
+            // check the directory. if does not exist, create. if exists, delete
+            // in order to delete data from previous run, if any
+            DirectoryInfo di = new DirectoryInfo(targetParentDir);
+            if (Directory.Exists(targetParentDir)) Directory.Delete(targetParentDir, true);
+            di.Create();
 
-            XDocument doc = new XDocument(
-                new XDeclaration("1.0", "utf-8", "yes"),
-                new XComment("MODFLOW Result, parsed from " + inputAddress),
-                new XElement("Results"));
+            // start stopwatch
+            Stopwatch watch = new Stopwatch();
+            watch.Start();
 
-            doc.Save(targetAddress);
+            // log pathname
+            FileInfo log = new FileInfo(Path.Combine(di.FullName, "log.txt"));
+            if (log.Exists == false)
+            {
+                using (FileStream fslog = new FileStream(log.FullName, FileMode.Create))
+                {
+                    using (StreamWriter sw = new StreamWriter(fslog))
+                    {
+                        sw.WriteLine(DateTime.Now.ToString() + "\t" + "Process started.");
+                    }
+                }
+            }
 
+            // read and write data
             using (FileStream fs = new FileStream(inputAddress, FileMode.Open, FileAccess.Read))
             {
                 using (BinaryReader br = new BinaryReader(fs))
                 {
-                    int timeStepCount = 0;
-
                     while (fs.Position < fs.Length)
                     {
-                        var xd = XDocument.Load(targetAddress);
-
-                        XElement root = xd.XPathSelectElement("//Results");
-
                         // read result header first
                         int timeStep = br.ReadInt32();
                         int stressPeriod = br.ReadInt32();
@@ -77,60 +99,58 @@ namespace ModflowCcfConverter
                         int nValsPerCell;
                         if (iType == 5) nValsPerCell = br.ReadInt32();
                         else nValsPerCell = 1;
-                        //writeLine(nameof(nValsPerCell), nValsPerCell);
 
-                        // create header XElement of it with a lot of attributes, lol
-                        XElement header = new XElement(fText,
-                            new XAttribute(nameof(timeStep), timeStep),
-                            new XAttribute(nameof(stressPeriod), stressPeriod),
-                            new XAttribute(nameof(nCol), nCol),
-                            new XAttribute(nameof(nRow), nRow),
-                            new XAttribute(nameof(nLay), nLay),
-                            new XAttribute(nameof(iType), iType)
-                            );
+                        DirectoryInfo di1 = new DirectoryInfo(Path.Combine(di.FullName, fText));
+                        if (di1.Exists == false) di1.Create();
 
-                        XElement tempText = new XElement(nameof(tempText));
                         for (int i = 1; i <= nValsPerCell - 1; i++)
                         {
                             string text = (new string(br.ReadChars(16))).Replace(" ", string.Empty);
-                            tempText.Add(new XElement(nameof(text), text, new XAttribute("id", i)));
                         }
 
-                        header.Add(tempText);
-
-                        int nList;
-                        if (iType == 2 || iType == 5)
-                        {
-                            nList = br.ReadInt32();
-                            //writeLine(nameof(nList), nList);
-                        }
-                        else nList = 0;
-                        header.Add(new XAttribute(nameof(nList), nList));
+                        int nList = 0;
+                        if (iType == 2 || iType == 5) nList = br.ReadInt32();
 
                         string caseType = string.Empty;
-                        XElement data = new XElement(nameof(data));
+
+
+                        StringBuilder sb = new StringBuilder();
+
+                        // append ascii headers
+                        sb.AppendLine("ncols         " + ncolsDS.ToString());
+                        sb.AppendLine("nrows         " + nrowsDS.ToString());
+                        sb.AppendLine("xllcorner     " + xllcorner.ToString());
+                        sb.AppendLine("yllcorner     " + yllcorner.ToString());
+                        sb.AppendLine("cellsize      " + cellsize.ToString());
+                        sb.AppendLine("NODATA_value  " + nodatalue.ToString());
+
                         switch (iType)
                         {
                             case 0:
                             case 1:
                                 caseType = "3D array of values";
-
                                 for (int lay = 1; lay <= nLay; lay++)
                                 {
-                                    XElement xLay = new XElement(nameof(lay), new XAttribute("layid", lay));
+                                    // create subdir for each layer
+                                    DirectoryInfo di2 = new DirectoryInfo(Path.Combine(di1.FullName, nameof(lay) + lay.ToString()));
+                                    if (di2.Exists == false) di2.Create();
 
-                                    for (int row = 1; row <= nRow; row++)
+                                    using (FileStream fs1 = new FileStream(Path.Combine(di2.FullName, stressPeriod.ToString() + ".asc"), FileMode.CreateNew))
                                     {
-                                        XElement xRow = new XElement(nameof(row), new XAttribute("rowid", row));
-                                        for (int col = 1; col <= nCol; col++)
+                                        using (StreamWriter sw = new StreamWriter(fs1))
                                         {
-                                            float val = br.ReadSingle();
-                                            XElement xCol = new XElement(nameof(col), new XAttribute("colid", col), val);
-                                            xRow.Add(xCol);
+                                            for (int row = 1; row <= nRow; row++)
+                                            {
+                                                for (int col = 1; col <= nCol; col++)
+                                                {
+                                                    float val = br.ReadSingle();
+                                                    sb.Append(val.ToString() + " ");
+                                                }
+                                                sb.AppendLine();
+                                            }
+                                            sw.Write(sb.ToString());
                                         }
-                                        xLay.Add(xRow);
                                     }
-                                    data.Add(xLay);
                                 }
                                 break;
                             case 2:
@@ -139,329 +159,88 @@ namespace ModflowCcfConverter
                                 for (int i = 0; i < nList; i++)
                                 {
                                     int cellID = br.ReadInt32();
-                                    XElement xCel = new XElement("cell", new XAttribute(nameof(cellID), cellID));
+
                                     for (int j = 0; j < nValsPerCell; j++)
                                     {
                                         float val = br.ReadSingle();
-                                        xCel.Add(new XElement(nameof(val), new XAttribute("id", j), val));
+
                                     }
-                                    data.Add(xCel);
+
                                 }
                                 break;
                             case 3:
                                 caseType = "2D layer indicator array followed by a 2D array of values";
                                 //int[] layerIDs = new int[nCol * nRow];
                                 // layer indicator
-                                XElement layerID = new XElement(nameof(layerID));
+
                                 for (int row = 1; row <= nRow; row++)
                                 {
-                                    XElement xRow = new XElement(nameof(row), new XAttribute("rowid", row));
+
                                     for (int col = 1; col <= nCol; col++)
                                     {
                                         int val = br.ReadInt32();
                                         XElement xCol = new XElement(nameof(col), new XAttribute("colid", col), val);
-                                        xRow.Add(xCol);
+
                                     }
-                                    layerID.Add(xRow);
+
                                 }
-                                XElement value = new XElement(nameof(value));
+
                                 for (int row = 1; row <= nRow; row++)
                                 {
-                                    XElement xRow = new XElement(nameof(row), new XAttribute("rowid", row));
+
                                     for (int col = 1; col <= nCol; col++)
                                     {
                                         float val = br.ReadSingle();
-                                        XElement xCol = new XElement(nameof(col), new XAttribute("colid", col), val);
-                                        xRow.Add(xCol);
+
                                     }
-                                    value.Add(xRow);
+
                                 }
-                                data.Add(layerID);
-                                data.Add(value);
+
                                 break;
                             case 4:
                             default:
-                                XElement firstLayerValue = new XElement(nameof(firstLayerValue));
+
                                 caseType = "2D array of values associated with layer 1";
                                 for (int row = 1; row <= nRow; row++)
                                 {
-                                    XElement xRow = new XElement(nameof(row), new XAttribute("rowid", row));
                                     for (int col = 1; col <= nCol; col++)
                                     {
                                         float val = br.ReadSingle();
-                                        XElement xCol = new XElement(nameof(col), new XAttribute("colid", col), val);
-                                        xRow.Add(xCol);
+
                                     }
-                                    firstLayerValue.Add(xRow);
+
                                 }
-                                data.Add(firstLayerValue);
+
                                 break;
                         }
 
-                        header.Add(new XAttribute(nameof(caseType), caseType));
-
-                        header.Add(data);
-                        root.Add(header);
-
-                        for (int i = 0; i < 20; i++)
+                        using (FileStream fslog = new FileStream(Path.Combine(di.FullName, "log.txt"), FileMode.Append))
                         {
-                            Console.Write("-");
-                        }
-
-
-                        Console.WriteLine();
-                        Console.WriteLine("Done writing " + fText + " as \"" + caseType + "\" at " + nameof(stressPeriod) + " " + stressPeriod);
-                        Console.WriteLine();
-                        /*
-                        Console.Write("Continue? (y/n) ");
-                        object c = null;
-                        try { c = Console.ReadLine(); }
-                        catch { }
-
-                        if (!(c.ToString() == "y" || c.ToString() == "Y"))
-                        {
-                            break;
-                        }*/
-                        Console.WriteLine();
-
-
-                        xd.Save(targetAddress);
-
-                    }
-
-
-
-                }
-            }
-        }
-
-        private static void EricMethod(string inputAddress)
-        {
-            int timeStepCount = 0;
-            using (FileStream fs = new FileStream(inputAddress, FileMode.Open, FileAccess.Read))
-            {
-                using (BinaryReader br = new BinaryReader(fs))
-                {
-                    long streamLength = fs.Length;
-
-                    int timeStep/*, stressPeriod*/;
-                    char[] fText, tmpText;
-
-                    int nCol, nRow, nLay;
-                    int iType, nvalsPerCell;
-
-                    float trashSingle;
-
-                    bool skipValues;
-
-                    int beginningTS, endingTS;
-
-                    object[] layerFlux = null;
-
-                    int cellID, layerID;
-
-                    beginningTS = 1;
-                    endingTS = 292;
-
-                    timeStepCount = 0;
-                    do
-                    {
-                        timeStepCount++;
-
-                        // timestep, stress period, and description
-                        timeStep = br.ReadInt32();
-                        Console.WriteLine("timeStep\t\t: " + timeStep.ToString());
-                        timeStep = br.ReadInt32();
-                        Console.WriteLine("stressPeriod\t\t: " + timeStep.ToString());
-                        fText = br.ReadChars(16);
-                        Console.WriteLine("description\t\t: " + new string(fText));
-                        //Console.Read();
-
-                        // Number of columns, rows, and layers
-                        nCol = br.ReadInt32();
-                        Console.WriteLine("nCol\t\t\t: " + nCol.ToString());
-                        nRow = br.ReadInt32();
-                        Console.WriteLine("nRow\t\t\t: " + nRow.ToString());
-                        nLay = Math.Abs(br.ReadInt32());
-                        Console.WriteLine("nLays\t\t\t: " + nLay.ToString());
-
-                        // type of data
-                        iType = br.ReadInt32();
-                        Console.WriteLine("iType\t\t\t: " + iType.ToString());
-                        for (int i = 0; i < 3; i++)
-                        {
-                            trashSingle = br.ReadSingle();
-                            Console.WriteLine("trashSingle\t\t: " + trashSingle);
-                        }
-                        nvalsPerCell = 1;
-                        if (iType == 5)
-                        {
-                            nvalsPerCell = br.ReadInt32();
-                        }
-                        Console.WriteLine("nvalsPerCell\t\t: " + nvalsPerCell.ToString());
-
-                        for (int y = 1; y <= nvalsPerCell - 1; y++)
-                        {
-                            tmpText = br.ReadChars(16);
-                            Console.WriteLine("tmpText\t\t\t: " + new string(tmpText));
-                        }
-
-                        int nList = 0;
-                        if (iType == 2 || iType == 5)
-                        {
-                            nList = br.ReadInt32();
-                        }
-
-                        // Make sure just to skip the values that aren't of interest
-                        skipValues = false;
-
-                        if (beginningTS <= timeStep && (endingTS == -1 || timeStep <= endingTS))
-                        {
-                            timeStep = timeStep - beginningTS + 1;
-                            Console.WriteLine("Updated timeStep\t: " + timeStep.ToString());
-                        }
-                        else
-                        {
-                            skipValues = true;
-                        }
-
-                        switch (new string(fText))
-                        {
-                            case "   CONSTANT HEAD":
-                            case "FLOW RIGHT FACE ":
-                            case "FLOW FRONT FACE ":
-                            case "FLOW LOWER FACE ":
-                            case "         STORAGE":
-                                //case "           WELLS":
-                                skipValues = true;
-                                break;
-                            default:
-                                break;
-                        }
-                        Console.WriteLine("skipValues\t\t: " + skipValues.ToString());
-
-                        if (!skipValues)
-                        {
-                            // Initialize output arrays
-                            layerFlux = null;
-                            layerFlux = new object[nLay];
-
-                            for (int i = 0; i < nLay; i++)
+                            using (StreamWriter sw = new StreamWriter(fslog))
                             {
-                                layerFlux[i] = new float[nCol * nRow];
-
+                                sw.WriteLine(DateTime.Now.ToString() + "\t" + "Done writing " + fText + " as " + caseType);
                             }
                         }
 
-                        // read the values from the files
-                        switch (iType)
-                        {
-                            case 0:
-                            case 1:
-                                Console.WriteLine("3D array of values");
-                                if (skipValues)
-                                {
-                                    fs.Position += nLay * nRow * nCol * 4;
-                                    Console.WriteLine("[Values skipped]");
-                                }
-                                else
-                                {
-                                    for (int layer = 1; layer <= nLay; layer++)
-                                    {
-                                        for (int row = 1; row <= nRow; row++)
-                                        {
-                                            for (int col = 1; col <= nCol; col++)
-                                            {
-                                                Console.WriteLine(br.ReadSingle().ToString() + "\t");
-                                            }
-                                        }
-                                    }
-                                }
-                                break;
-                            case 2:
-                            case 5:
-                                Console.WriteLine("list of cells and associated values");
-                                if (skipValues)
-                                {
-                                    fs.Position += nList * (4 + nvalsPerCell * 4);
-                                    Console.WriteLine("[Values skipped]");
-                                }
-                                else
-                                {
-                                    Console.Write("layerID" + "\t" + "cellID");
-                                    for (int i = 1; i <= nvalsPerCell; i++) Console.Write("\t" + "val");
-                                    Console.WriteLine();
-
-                                    for (int y = 1; y <= nList; y++)
-                                    {
-                                        cellID = br.ReadInt32();
-                                        layerID = ((cellID - ((cellID - 1) % (nCol * nRow) + 1)) / (nCol * nRow) + 1); //layerid starts at one
-                                        Console.Write(layerID + "\t" + cellID);
-                                        for (int i = 1; i <= nvalsPerCell; i++)
-                                        {
-                                            Console.Write("\t" + br.ReadSingle().ToString());
-                                        }
-                                        Console.WriteLine();
-                                    }
-                                }
-                                break;
-                            case 3:
-                                Console.WriteLine("2D layer indicator array followed by a 2D array of values");
-                                if (skipValues)
-                                {
-                                    fs.Position += nRow * nCol * 4 * 2;
-                                    Console.WriteLine("[Values skipped]");
-                                }
-                                else
-                                {
-                                    int[] layerIDs = new int[nCol * nRow];
-                                    for (int row = 1; row <= nRow; row++)
-                                    {
-                                        for (int col = 1; col <= nCol; col++)
-                                        {
-                                            layerIDs[(row - 1) * nCol + col] = br.ReadInt32();
-                                            Console.WriteLine("layerIDs: " + layerIDs.ToString());
-                                        }
-                                    }
-                                    for (int row = 1; row <= nRow; row++)
-                                    {
-                                        for (int col = 1; col <= nCol; col++)
-                                        {
-                                            cellID = (row - 1) * nCol + col;
-                                            Console.WriteLine(layerIDs[cellID].ToString() + br.ReadSingle().ToString());
-                                        }
-                                    }
-                                }
-                                break;
-                            case 4:
-                            default:
-                                Console.WriteLine("2D array of values associated with layer 1");
-                                if (skipValues)
-                                {
-                                    fs.Position += nRow * nCol * 4;
-                                    Console.WriteLine("[Values skipped]");
-                                }
-                                else
-                                {
-                                    for (int row = 1; row <= nRow; row++)
-                                    {
-                                        for (int col = 1; col <= nCol; col++)
-                                        {
-                                            cellID = (row - 1) * nCol + col;
-                                            Console.WriteLine("cellID: " + cellID + "\t" + br.ReadSingle());
-                                        }
-                                    }
-                                }
-                                break;
-                        }
-
-                        Console.WriteLine("----------------------------------------");
-                        Console.WriteLine();
-                        //Console.ReadLine();
-                    } while (fs.Position < fs.Length);
+                    }
                 }
             }
-            Console.WriteLine(timeStepCount);
+
+            // stop stopwatch
+            watch.Stop();
+            var elapsed = watch.Elapsed;
+
+            using (FileStream fslog = new FileStream(Path.Combine(di.FullName, "log.txt"), FileMode.Append))
+            {
+                using (StreamWriter sw = new StreamWriter(fslog))
+                {
+                    sw.WriteLine(DateTime.Now.ToString() + "\t" + "Process finished for " + elapsed.ToString());
+                }
+            }
+            
+            Console.WriteLine("Process finished for " + elapsed.ToString() + " , press enter to exit");
         }
+
+
     }
 }
