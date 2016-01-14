@@ -27,12 +27,12 @@ namespace ModflowCcfConverter
 
         public void DoProgram()
         {
-            string inputAddress = @"F:\DSModel_09.ccf";
+            string inputAddress = @"D:\DSModel_09.ccf";
             //string inputAddress = @"D:\ReModel3.ccf";
-            string targetAddress = @"F:\resultDS.xml";
+            string targetAddress = @"D:\resultDS.xml";
             //string targetAddress = @"D:\resultUS.xml";
 
-            string targetParentDir = @"F:\resultDS";
+            string targetParentDir = @"D:\resultDS";
 
             // WriteToXml writer = new WriteToXml();
             // writer.Writer(inputAddress, targetAddress);
@@ -57,7 +57,11 @@ namespace ModflowCcfConverter
             // check the directory. if does not exist, create. if exists, delete
             // in order to delete data from previous run, if any
             DirectoryInfo di = new DirectoryInfo(targetParentDir);
-            if (Directory.Exists(targetParentDir)) Directory.Delete(targetParentDir, true);
+            if (Directory.Exists(targetParentDir))
+            {
+                Console.WriteLine("Deleting existing dir...");
+                Directory.Delete(targetParentDir, true);
+            }
             di.Create();
 
             // start stopwatch
@@ -158,12 +162,12 @@ namespace ModflowCcfConverter
                                 caseType = "list of cells and associated values";
 
                                 // initiate valueholder array
-                                float[,,] valueholder = new float[nValsPerCell, nRow, nCol];
-                                for (int val = 0; val < nValsPerCell; val++)
+                                float[,,] valueholder = new float[nValsPerCell + 1, nRow + 1, nCol + 1];
+                                for (int val = 0; val <= nValsPerCell; val++)
                                 {
-                                    for (int row = 0; row < nRow; row++)
+                                    for (int row = 0; row <= nRow; row++)
                                     {
-                                        for (int col = 0; col < nCol; col++)
+                                        for (int col = 0; col <= nCol; col++)
                                         {
                                             valueholder[val, row, col] = 0f;
                                         }
@@ -194,28 +198,28 @@ namespace ModflowCcfConverter
                                     int row = (int)Math.Ceiling(((double)item.Key / (double)nCol));
                                     if (row > nRow)
                                         row = row - nRow;
-                                    int col = item.Key % row;
+                                    int col = item.Key % nCol;
 
-                                    for (int val = 0; val < nValsPerCell; val++)
+                                    for (int val = 1; val <= nValsPerCell; val++)
                                     {
-                                        valueholder[val, row, col] = item.Value[val];
+                                        valueholder[val, row, col] = item.Value[val - 1];
                                     }
                                 }
 
                                 // write ascii
-                                for (int val = 0; val < nValsPerCell; val++)
+                                for (int val = 1; val <= nValsPerCell; val++)
                                 {
                                     // create subdir for each value
-                                    DirectoryInfo di2 = new DirectoryInfo(Path.Combine(di1.FullName, nameof(val) + (val + 1).ToString()));
+                                    DirectoryInfo di2 = new DirectoryInfo(Path.Combine(di1.FullName, nameof(val) + (val).ToString()));
                                     if (di2.Exists == false) di2.Create();
 
                                     using (FileStream fs1 = new FileStream(Path.Combine(di2.FullName, stressPeriod.ToString() + ".asc"), FileMode.CreateNew))
                                     {
                                         using (StreamWriter sw = new StreamWriter(fs1))
                                         {
-                                            for (int row = 0; row < nRow; row++)
+                                            for (int row = 1; row <= nRow; row++)
                                             {
-                                                for (int col = 0; col < nCol; col++)
+                                                for (int col = 1; col <= nCol; col++)
                                                 {
                                                     sb.Append(valueholder[val, row, col].ToString() + " ");
                                                 }
@@ -227,7 +231,7 @@ namespace ModflowCcfConverter
                                 }
                                 break;
                             case 3:
-                                caseType = "2D layer indicator array followed by a 2D array of values";
+                                caseType = "2D layer indicator and 2D array of values";
                                 //int[] layerIDs = new int[nCol * nRow];
                                 // layer indicator
 
@@ -258,7 +262,7 @@ namespace ModflowCcfConverter
                             case 4:
                             default:
 
-                                caseType = "2D array of values associated with layer 1";
+                                caseType = "2D array of values for layer 1";
                                 for (int row = 1; row <= nRow; row++)
                                 {
                                     for (int col = 1; col <= nCol; col++)
@@ -276,7 +280,9 @@ namespace ModflowCcfConverter
                         {
                             using (StreamWriter sw = new StreamWriter(fslog))
                             {
-                                sw.WriteLine(DateTime.Now.ToString() + "\t" + "Done writing " + fText + " as " + caseType + " at stressperiod " + stressPeriod.ToString());
+                                string message = DateTime.Now.ToString() + "\tSP " + stressPeriod.ToString() + "\tDone writing " + fText;
+                                Console.WriteLine(message);
+                                sw.WriteLine(message);
                             }
                         }
 
