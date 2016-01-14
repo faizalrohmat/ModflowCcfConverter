@@ -27,12 +27,12 @@ namespace ModflowCcfConverter
 
         public void DoProgram()
         {
-            string inputAddress = @"D:\DSModel_09.ccf";
+            string inputAddress = @"F:\DSModel_09.ccf";
             //string inputAddress = @"D:\ReModel3.ccf";
-            string targetAddress = @"D:\resultDS.xml";
+            string targetAddress = @"F:\resultDS.xml";
             //string targetAddress = @"D:\resultUS.xml";
 
-            string targetParentDir = @"D:\resultDS";
+            string targetParentDir = @"F:\resultDS";
 
             // WriteToXml writer = new WriteToXml();
             // writer.Writer(inputAddress, targetAddress);
@@ -156,16 +156,74 @@ namespace ModflowCcfConverter
                             case 2:
                             case 5:
                                 caseType = "list of cells and associated values";
+
+                                // initiate valueholder array
+                                float[,,] valueholder = new float[nValsPerCell, nRow, nCol];
+                                for (int val = 0; val < nValsPerCell; val++)
+                                {
+                                    for (int row = 0; row < nRow; row++)
+                                    {
+                                        for (int col = 0; col < nCol; col++)
+                                        {
+                                            valueholder[val, row, col] = 0f;
+                                        }
+                                    }
+                                }
+
+                                // reading from binary file into dictionary
+                                Dictionary<int, List<float>> dicto = new Dictionary<int, List<float>>(nList);
+
                                 for (int i = 0; i < nList; i++)
                                 {
                                     int cellID = br.ReadInt32();
-
+                                    List<float> values = new List<float>(nValsPerCell);
                                     for (int j = 0; j < nValsPerCell; j++)
                                     {
-                                        float val = br.ReadSingle();
-
+                                        values.Add(br.ReadSingle());
                                     }
+                                    try
+                                    {
+                                        dicto.Add(cellID, values);
+                                    }
+                                    catch { }
+                                }
 
+                                // assign values
+                                foreach (var item in dicto)
+                                {
+                                    int row = (int)Math.Ceiling(((double)item.Key / (double)nCol));
+                                    if (row > nRow)
+                                        row = row - nRow;
+                                    int col = item.Key % row;
+
+                                    for (int val = 0; val < nValsPerCell; val++)
+                                    {
+                                        valueholder[val, row, col] = item.Value[val];
+                                    }
+                                }
+
+                                // write ascii
+                                for (int val = 0; val < nValsPerCell; val++)
+                                {
+                                    // create subdir for each value
+                                    DirectoryInfo di2 = new DirectoryInfo(Path.Combine(di1.FullName, nameof(val) + (val + 1).ToString()));
+                                    if (di2.Exists == false) di2.Create();
+
+                                    using (FileStream fs1 = new FileStream(Path.Combine(di2.FullName, stressPeriod.ToString() + ".asc"), FileMode.CreateNew))
+                                    {
+                                        using (StreamWriter sw = new StreamWriter(fs1))
+                                        {
+                                            for (int row = 0; row < nRow; row++)
+                                            {
+                                                for (int col = 0; col < nCol; col++)
+                                                {
+                                                    sb.Append(valueholder[val, row, col].ToString() + " ");
+                                                }
+                                                sb.AppendLine();
+                                            }
+                                            sw.Write(sb.ToString());
+                                        }
+                                    }
                                 }
                                 break;
                             case 3:
@@ -218,7 +276,7 @@ namespace ModflowCcfConverter
                         {
                             using (StreamWriter sw = new StreamWriter(fslog))
                             {
-                                sw.WriteLine(DateTime.Now.ToString() + "\t" + "Done writing " + fText + " as " + caseType);
+                                sw.WriteLine(DateTime.Now.ToString() + "\t" + "Done writing " + fText + " as " + caseType + " at stressperiod " + stressPeriod.ToString());
                             }
                         }
 
@@ -237,7 +295,7 @@ namespace ModflowCcfConverter
                     sw.WriteLine(DateTime.Now.ToString() + "\t" + "Process finished for " + elapsed.ToString());
                 }
             }
-            
+
             Console.WriteLine("Process finished for " + elapsed.ToString() + " , press enter to exit");
         }
 
