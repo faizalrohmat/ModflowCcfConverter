@@ -32,25 +32,21 @@ namespace ModflowCCfConverter
                 {
                     using (StreamReader sr = new StreamReader(fs))
                     {
-                        while (fs.Position < fs.Length)
+                        string str;
+                        while ((str = sr.ReadLine()) != null)
                         {
-                            List<int> cols = new List<int>();
-                            string[] strs = (sr.ReadLine()).Split(',');
-                            foreach (var str in strs)
+                            try
                             {
-                                try
-                                {
-                                    cols.Add(int.Parse(str));
-                                }
-                                catch
-                                {
-                                    cols.Add(0);
-                                }
+                                _cellIDs.Add(int.Parse(str));
                             }
-                            _cells.Add(cols);
+                            catch
+                            {
+
+                            }
                         }
                     }
                 }
+                _cellIDs.Sort();
             }
             catch (FileNotFoundException)
             {
@@ -69,19 +65,22 @@ namespace ModflowCCfConverter
                 using (StreamWriter sw = new StreamWriter(fs))
                 {
                     StringBuilder sb = new StringBuilder();
-                    sb.AppendLine("ncols         " + ncols.ToString());
-                    sb.AppendLine("nrows         " + nrows.ToString());
-                    sb.AppendLine("xllcorner     " + xllcorner.ToString());
-                    sb.AppendLine("yllcorner     " + yllcorner.ToString());
-                    sb.AppendLine("cellsize      " + cellsize.ToString());
-                    sb.AppendLine("NODATA_value  " + nodatavalue.ToString());
+                    sb.AppendLine("ncols         " + _ncols.ToString());
+                    sb.AppendLine("nrows         " + _nrows.ToString());
+                    sb.AppendLine("xllcorner     " + _xllcorner.ToString());
+                    sb.AppendLine("yllcorner     " + _yllcorner.ToString());
+                    sb.AppendLine("cellsize      " + _cellsize.ToString());
+                    sb.AppendLine("NODATA_value  " + _nodatavalue.ToString());
 
-                    for (int row = 1; row < nrows; row++)
+                    int thisCellID = 0;
+
+                    for (int row = 1; row <= _nrows; row++)
                     {
-                        for (int col = 1; col <= ncols; col++)
+                        for (int col = 1; col <= _ncols; col++)
                         {
-                            var val = _cells.Where(elm => (elm[0] == row && elm[1] == col)).FirstOrDefault();
-                            if (val != null)
+                            thisCellID = (row - 1) * _ncols + col;
+
+                            if (_cellIDs.Contains(thisCellID))
                             {
                                 sb.Append("1 ");
                             }

@@ -17,34 +17,13 @@ namespace ModflowCcfConverter
     {
         static void Main(string[] args)
         {
-            //Tester tester = new Tester();
-            //tester.DoProgram();
+            Tester tester = new Tester();
+            tester.DoProgram();
 
-            string input = @"D:\DSCells.txt";
-            string target = @"D:\DSAsciiCells.asc";
 
-            RiverCellBuilder riverCellBuilder = new RiverCellBuilder(217, 102, 705984f, 4211006f, 250f, -999f);
-
-            try
-            {
-                riverCellBuilder.ReadRowCol(input);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex.Message);
-            }
-
-            try
-            {
-                riverCellBuilder.WriteToAscii(target);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex.Message);
-            }
-            Console.WriteLine("Process Finished, Press Enter to Exit");
-            Console.ReadLine();
         }
+
+
     }
     public class Tester
     {
@@ -52,27 +31,12 @@ namespace ModflowCcfConverter
 
         public void DoProgram()
         {
-            string inputAddress = @"D:\DSModel_09.ccf";
-            //string inputAddress = @"D:\ReModel3.ccf";
-            string targetAddress = @"D:\resultDS.xml";
-            //string targetAddress = @"D:\resultUS.xml";
 
-            string targetParentDir = @"D:\resultDS";
+            //WriteToAsciiDir(@"F:\DSModel_09.ccf", @"F:\resultDS", 217, 102, 705984f, 4211006f, 250f, -999f);
+            //WriteToAsciiDir(@"F:\ReModel3.ccf", @"F:\resultUS", 213, 127, 597733f, 4195257f, 250f, -999f);
 
-            // WriteToXml writer = new WriteToXml();
-            // writer.Writer(inputAddress, targetAddress);
-
-            int ncolsDS = 217;
-            int nrowsDS = 102;
-            float xllcorner = 705984f;
-            float yllcorner = 4211006f;
-            float cellsize = 250f;
-            float nodatavalue = -999f;
-
-            WriteToAsciiDir(inputAddress, targetParentDir, ncolsDS, nrowsDS, xllcorner, yllcorner, cellsize, nodatavalue);
-
-            //EricMethod(inputAddress);
-
+            //WriteRiverCells(@"F:\DStrib.txt", @"F:\DSTribCells.asc", 217, 102, 705984f, 4211006f, 250f, -999f);
+            WriteRiverCells(@"F:\USboth.txt", @"F:\USBothCells.asc", 213, 127, 597733f, 4195257f, 250f, -999f);
             Console.ReadLine();
 
         }
@@ -330,6 +294,29 @@ namespace ModflowCcfConverter
             Console.WriteLine("Process finished for " + elapsed.ToString() + " , press enter to exit");
         }
 
+        private static void WriteRiverCells(string input, string target, int ncols, int nrows, float xllcorner, float yllcorner, float cellsize, float nodatavalue)
+        {
+            RiverCellBuilder riverCellBuilder = new RiverCellBuilder(ncols, nrows, xllcorner, yllcorner, cellsize, nodatavalue);
 
+            try
+            {
+                riverCellBuilder.ReadRowCol(input);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+            }
+
+            try
+            {
+                riverCellBuilder.WriteToAscii(target);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+            }
+            Console.WriteLine("Process Finished, Press Enter to Exit");
+            //Console.ReadLine();
+        }
     }
 }
