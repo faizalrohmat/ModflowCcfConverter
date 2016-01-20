@@ -17,8 +17,33 @@ namespace ModflowCcfConverter
     {
         static void Main(string[] args)
         {
-            Tester tester = new Tester();
-            tester.DoProgram();
+            //Tester tester = new Tester();
+            //tester.DoProgram();
+
+            string input = @"D:\DSCells.txt";
+            string target = @"D:\DSAsciiCells.asc";
+
+            RiverCellBuilder riverCellBuilder = new RiverCellBuilder(217, 102, 705984f, 4211006f, 250f, -999f);
+
+            try
+            {
+                riverCellBuilder.ReadRowCol(input);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+            }
+
+            try
+            {
+                riverCellBuilder.WriteToAscii(target);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+            }
+            Console.WriteLine("Process Finished, Press Enter to Exit");
+            Console.ReadLine();
         }
     }
     public class Tester
